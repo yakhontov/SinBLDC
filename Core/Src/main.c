@@ -94,7 +94,6 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t testDataToSend[] = "Test\0\0\0\0";
   RunTimers();
   /* USER CODE END 2 */
 
