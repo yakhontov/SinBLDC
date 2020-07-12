@@ -146,6 +146,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 	currentTime = HAL_TIM_ReadCapturedValue(htim, htim->Channel);
 	uint16_t delta = currentTime - prevTime;
+	printf("123\n");//%d", delta);
 
 	currentPosDeg = hallDeg[currentHall];
 	if(delta)

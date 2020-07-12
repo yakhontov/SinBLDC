@@ -103,6 +103,18 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 } 
 
 /* USER CODE BEGIN 1 */
+int _write (int fd, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, 0xFFFF);
+    return len;
+}
+
+int _read (int fd, char *ptr, int len)
+{
+    *ptr = 0x00; // Flush the character buffer
+    HAL_UART_Receive(&huart2, (uint8_t*) ptr, 1, 0xFFFF);
+    return 1;
+}
 
 /* USER CODE END 1 */
 

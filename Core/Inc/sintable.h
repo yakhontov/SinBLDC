@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "stm32f1xx_hal.h"
 #include "tim.h"
 
