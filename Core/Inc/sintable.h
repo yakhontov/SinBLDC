@@ -9,11 +9,15 @@
 #define INC_SINTABLE_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "stm32f1xx_hal.h"
 #include "tim.h"
 
+void EnableHall(bool ena);
+void CalibDrive(int speed, int torq, int time);
+void RunDrive(int speed, int torq);
 void RunTimer1(TIM_HandleTypeDef *htim);
 void RunTimer4(TIM_HandleTypeDef *htim);
 void RunTimers();

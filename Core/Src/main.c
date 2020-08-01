@@ -99,13 +99,25 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+	TIM1->CCR1 = 0;
+	TIM1->CCR2 = 0;
+	TIM1->CCR3 = 0;
+
+  CalibDrive(10, 9, 3000);
+  RunDrive(10, 9);
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //printf("Test\n");
-	  HAL_Delay(1000);
+//	for(int i = 1; i <= 100; i++)
+//		  CalibDrive(10, 9, 1000);
+	  //CalibDrive(10, 9, 10000);
+	  //for(int i = 9; i >= 0; i--)
+		  //CalibDrive(i, 9, 1000);
+	  //while(1);
   }
   /* USER CODE END 3 */
 }
