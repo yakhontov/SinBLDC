@@ -18,6 +18,22 @@ volatile int currentTorq = 0;
 volatile bool enableHall = false;
 volatile bool enableCalibHallPos = false;
 
+// Ограничение аргумента диапазоном [0-3600)
+int constrainDeg(int deg)
+{
+	if(deg >= 3600 && deg < 7200) // Это наиболее частый сценарий, т.к. при расчетах к фазе прибавляется 120 и 240 гдадусов, поэтому для него отдельное условие
+		deg -= 3600;
+	else
+	{
+		// Для начала приведем к диапазону [0-3600)
+		if(deg < 0)
+			deg -= deg % 3600 - 3600;// ((currentPosDeg/3600)-1) * 3600; // В результате получим всегда положительное число
+		else
+			if(deg >= 3600)
+				deg -= deg % 3600;// (currentPosDeg/3600) * 3600; // В результате получим число менее 3600
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 int16_t Sin090(uint16_t deg) // Поскольку аргумент должен быть всегда положительным, тип входного параметра будет uint16_t
 {
@@ -25,7 +41,7 @@ int16_t Sin090(uint16_t deg) // Поскольку аргумент должен
 }
 
 //////////////////////////////////////////////////////////////////////////
-int16_t Sin(int16_t deg)
+int16_t Sin(int deg)
 {
 	if(deg >= 3600 && deg < 7200) // Это наиболее частый сценарий, т.к. при расчетах фазе прибавляется 120 и 240 гдадусов, поэтому для него отдельное условие
 		deg -= 3600;
@@ -47,234 +63,11 @@ int16_t Sin(int16_t deg)
 	return Sin090(deg);
 }
 
-// Возвращает в трех младших битах состояние датчиков Холла
-uint8_t ReadHallSensors() { return (GPIOB->IDR >> 6) & 0b111; }
 
 void EnableHall(bool ena) { enableHall = ena; }
 
-void ToggleB0() { GPIOB->ODR ^= 0b1; }
-
-void ToggleB1() { GPIOB->ODR ^= 0b10; }
-
 int constrToARR(int val) { return (val < 0)?0:((val > 2400)?2400:val); }
 
-void OnTimer1Overflow()
-{
-	const int m = 9;
-	if(currentPosDeg >= 3600 && currentPosDeg < 7200) // Это наиболее частый сценарий, т.к. при расчетах фазе прибавляется 120 и 240 гдадусов, поэтому для него отдельное условие
-		currentPosDeg -= 3600;
-	else
-	{
-		// Для начала приведем к диапазону [0-3600)
-		if(currentPosDeg < 0)
-			currentPosDeg -= currentPosDeg % 3600 - 3600;// ((currentPosDeg/3600)-1) * 3600; // В результате получим всегда положительное число
-		else
-			if(currentPosDeg >= 3600)
-				currentPosDeg -= currentPosDeg % 3600;// (currentPosDeg/3600) * 3600; // В результате получим число менее 3600
-	}
-	int currentStep = currentPosDeg / 600;
-	switch(currentStep)
-	{
-	case 0:
-	case 1:
-		TIM1->CCR1 = constrToARR(Sin((int16_t)currentPosDeg) * currentTorq);
-		TIM1->CCR2 = 0;
-		TIM1->CCR3 = constrToARR(-Sin((int16_t)(currentPosDeg - 1200)) * currentTorq);
-		break;
-	case 2:
-	case 3:
-		TIM1->CCR1 = constrToARR(-Sin((int16_t)(currentPosDeg - 2400)) * currentTorq);
-		TIM1->CCR2 = constrToARR(Sin((int16_t)(currentPosDeg - 1200)) * currentTorq);
-		TIM1->CCR3 = 0;
-		break;
-	case 4:
-	case 5:
-		TIM1->CCR1 = 0;
-		TIM1->CCR2 = constrToARR(-Sin((int16_t)(currentPosDeg)) * currentTorq);
-		TIM1->CCR3 = constrToARR(Sin((int16_t)(currentPosDeg - 2400)) * currentTorq);
-		break;
-	default:
-		ToggleB0();
-	}
-
-//	switch(currentStep)
-//	{
-//	case 0:
-//		TIM1->CCR1 = 2400;//255 * currentTorq;
-//		TIM1->CCR2 = 0;
-//		TIM1->CCR3 = 0;
-//		break;
-//	case 1:
-//		TIM1->CCR1 = 1200;
-//		TIM1->CCR2 = 1200;
-//		TIM1->CCR3 = 0;
-//		break;
-//	case 2:
-//		TIM1->CCR1 = 0;
-//		TIM1->CCR2 = 2400;//255 * currentTorq;
-//		TIM1->CCR3 = 0;
-//		break;
-//	case 3:
-//		TIM1->CCR1 = 0;
-//		TIM1->CCR2 = 1200;
-//		TIM1->CCR3 = 1200;
-//		break;
-//	case 4:
-//		TIM1->CCR1 = 0;
-//		TIM1->CCR2 = 0;
-//		TIM1->CCR3 = 2400;//255 * currentTorq;
-//		break;
-//	case 5:
-//		TIM1->CCR1 = 1200;
-//		TIM1->CCR2 = 0;
-//		TIM1->CCR3 = 1200;
-//		break;
-//	}
-
-
-	if(!currentPosDeg)
-		ToggleB0();
-	currentPosDeg += currentSpeed;
-}
-
-void RunTimer1(TIM_HandleTypeDef *htim)
-{
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_2);
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_3);
-	HAL_TIM_Base_Start_IT(htim);
-}
-
-void RunTimer4(TIM_HandleTypeDef *htim)
-{
-	TIM4_OC_SetPolarity(ReadHallSensors());
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_1);
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_2);
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_3);
-	HAL_TIM_Base_Start(htim);
-}
-
-void RunTimers()
-{
-	RunTimer1(&htim1);
-	RunTimer4(&htim4);
-}
-
-void OnTimer4Overflow()
-{
-	ToggleB0();
-}
-
-void TIM4_OC_SetPolarity(uint8_t hallState)
-{
-	//return;
-	if(hallState & 0b001)
-		TIM4->CCER |= TIM_CCER_CC1P;
-	else
-		TIM4->CCER &= ~TIM_CCER_CC1P;
-	if(hallState & 0b010)
-		TIM4->CCER |= TIM_CCER_CC2P;
-	else
-		TIM4->CCER &= ~TIM_CCER_CC2P;
-	if(hallState & 0b100)
-		TIM4->CCER |= TIM_CCER_CC3P;
-	else
-		TIM4->CCER &= ~TIM_CCER_CC3P;
-}
-
-//void HAL_TIM_PeriodElapsedHalfCpltCallback(TIM_HandleTypeDef *htim)
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-	if(htim->Instance == TIM1)
-	{
-		if(!(htim->Instance->CR1 & TIM_CR1_DIR))
-			OnTimer1Overflow();
-	}
-	else
-		if(htim->Instance == TIM4)
-			OnTimer4Overflow();
-}
-
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-	static uint16_t prevCCR[3] = {0, 0, 0};
-	uint16_t currentCCR[3];
-	static prevTime = 0;
-	uint16_t currentTime;
-
-	prevHall = currentHall;
-	currentHall = ReadHallSensors(); // Читаем текущее состояние датчиков
-
-	TIM4_OC_SetPolarity(currentHall); // Устанавливаем правильную полярность для следующего захвата
-
-	// Читаем новые значения из всех регистров CCR
-	currentCCR[0] = TIM4->CCR1;
-	currentCCR[1] = TIM4->CCR2;
-	currentCCR[2] = TIM4->CCR3;
-
-	ToggleB1(); // Debug
-
-	// Определяем какой из регистров изменился
-	uint8_t changedHallId;
-	if(prevCCR[0] != currentCCR[0])
-		changedHallId = 0;
-	else if(prevCCR[1] != currentCCR[1])
-		changedHallId = 1;
-	else
-		changedHallId = 2;
-	currentTime = currentCCR[changedHallId]; // и по нему определяем время последнего импульса
-	uint16_t deltaTime = currentTime - prevTime; // Вычисляем время, прошедшее с момента последнего импульса
-
-	if(enableCalibHallPos) // Если включена калибровка позиции датчиклв холла, значит датчики не участвуют в работе мотора, фазу мотора в настоящий момент времени нужно сохранить
-		hallPosDeg[currentHall] = currentPosDeg;
-	else
-	{
-		currentPosDeg = hallDeg[currentHall];
-		if(deltaTime)
-		{// Градусы за один шаг датчиков, делитель таймера 4, ARR таймера 1 / время шага = скорость вращения (градусов/один шаг ШИМ)
-			//currentSpeed = (600 * 128 * 4800) / deltaTime;
-			currentSpeed = (600 * 4800) / (deltaTime * 128);
-			if(currentSpeed < 1)
-				currentSpeed = 1;
-		}
-		else
-			currentSpeed = 1;
-	}
 
 
 
-	//printf("%d %d %d\n", prevTime, currentTime, c);
-	//printf("%d %d %d  %d %d %d\n", currentCCR[0], currentCCR[1], currentCCR[2], prevTime, currentTime, deltaTime);
-	//printf("%d %d %d\n", deltaTime, currentSpeed, hallDeg[currentHall]);
-
-	prevTime = currentTime;
-
-	// Сохраняем значения регистров CCR
-	prevCCR[0] = currentCCR[0];
-	prevCCR[1] = currentCCR[1];
-	prevCCR[2] = currentCCR[2];
-}
-
-void CalibDrive(int speed, int torq, int time)
-{
-	currentSpeed = speed;
-	currentTorq = torq;
-	enableCalibHallPos = false;
-	//printf("Speed: %d, torq %d\n", speed, torq);
-	printf("%d, ", speed);
-	HAL_Delay(time / 2);
-	enableCalibHallPos = true;
-	HAL_Delay(time / 2);
-	for(int i = 1; i < 7; i++)
-		printf("%d, ", hallPosDeg[i]);
-	printf("\n");
-}
-
-void RunDrive(int speed, int torq)
-{
-	currentSpeed = speed;
-	currentTorq = torq;
-	enableCalibHallPos = false;
-	enableHall = true;
-	printf("Run. Speed: %d, torq %d\n", speed, torq);
-}
