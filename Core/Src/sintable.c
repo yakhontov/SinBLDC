@@ -19,12 +19,15 @@ volatile bool enableHall = false;
 volatile bool enableCalibHallPos = false;
 
 // Ограничение аргумента диапазоном [0-3600)
-int constrainDeg(int deg)
+int constrain3600(int deg)
 {
 	if(deg >= 3600 && deg < 7200) // Это наиболее частый сценарий, т.к. при расчетах к фазе прибавляется 120 и 240 гдадусов, поэтому для него отдельное условие
 		deg -= 3600;
+	else if(deg >= -3600 && deg < 0)
+		deg += 3600;
 	else
 	{
+		// TODO Переделать, что-то в этом блоке не так
 		// Для начала приведем к диапазону [0-3600)
 		if(deg < 0)
 			deg -= deg % 3600 - 3600;// ((currentPosDeg/3600)-1) * 3600; // В результате получим всегда положительное число
@@ -62,12 +65,4 @@ int16_t Sin(int deg)
 		return Sin090(1800 - deg);
 	return Sin090(deg);
 }
-
-
-void EnableHall(bool ena) { enableHall = ena; }
-
-int constrToARR(int val) { return (val < 0)?0:((val > 2400)?2400:val); }
-
-
-
 

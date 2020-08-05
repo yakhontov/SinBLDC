@@ -1,6 +1,8 @@
 #ifndef INC_DRIVE_H_
 #define INC_DRIVE_H_
 
-#include "tim.h"
+void RunTimers();
+void CalibDrive(int speed, int torq, int time);
+void RunDrive(int speed, int torq);
 
 #endif
