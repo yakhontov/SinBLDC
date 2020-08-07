@@ -1,7 +1,20 @@
 #include "hall.h"
 
-HallMode hallMode = HallModeEnabled;
+
+HallMode hallMode = HallModeDisabled;
+
 int hallPosDegByState[] = {0, 2350, 880, 1040, 3050, 2510, 360, 0}; //
+//const int hallDeg[] = {0, 0, 1200, 600, 2400, 3000, 1800};
+
+int hallCalibPosByState[] = {0, 0, 0, 0, 0, 0, 0, 0}; // При калибровке датчиков сюда заносятся данные
+const int calibDempDiv = 256; // Делитель демпфера при калибровке. Чем больше значение, тем медленнее будет работать демпфер
+const int calibMult = 100;
+
+const uint8_t hallState[] = {0b001, 0b011, 0b010, 0b110, 0b100, 0b101};
+							// 0     60     120    180    240    300
+
+int hallPosDeg[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
 
 // Инверсия пина B1
 void ToggleB1() { GPIOB->ODR ^= 0b10; }
@@ -31,12 +44,12 @@ void TIM4_OC_SetPolarity(uint8_t hallState)
 }
 
 // Настройка таймера 4 и его запуск
-void RunTimer4(TIM_HandleTypeDef *htim)
+void RunTimer4()
 {
 	TIM4_OC_SetPolarity(ReadHallSensors());
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_1);
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_2);
-	HAL_TIM_IC_Start_IT(htim, TIM_CHANNEL_3);
+	HAL_TIM_IC_Start_IT(&htim4, TIM_CHANNEL_1);
+	HAL_TIM_IC_Start_IT(&htim4, TIM_CHANNEL_2);
+	HAL_TIM_IC_Start_IT(&htim4, TIM_CHANNEL_3);
 	HAL_TIM_Base_Start(&htim4);
 }
 
@@ -64,6 +77,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	currentCCR[2] = TIM4->CCR3;
 
 	ToggleB1(); // Debug
+	if(currentHallState < 1 || currentHallState > 6) // Ошибка датчиков
+	{
+		ToggleB1(); // Error
+		ToggleB1();
+	}
 
 	// Определяем какой из датчиков Холла изменил свое состояние (определяем индекс датчика)
 	uint8_t changedHallId;
@@ -79,23 +97,26 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 	int currentRotorPhaseDeg = hallPosDegByState[currentHallState]; // Текущее положение ротора в градусах
 	int deltaRotorPhaseDeg = currentRotorPhaseDeg - prevRotorPhaseDeg; // Сколько градусов прошло с прошлого раза. Значение может быть отрицательным. Знак числа зависит от направления вращения
-	deltaRotorPhaseDeg = (deltaRotorPhaseDeg > 1800)?(deltaRotorPhaseDeg - 1800):((deltaRotorPhaseDeg < -1800)?(deltaRotorPhaseDeg + 1800):deltaPhaseDeg); // Приводим к диапазону -1800..1800
+	deltaRotorPhaseDeg = (deltaRotorPhaseDeg > 1800)?(deltaRotorPhaseDeg - 1800):((deltaRotorPhaseDeg < -1800)?(deltaRotorPhaseDeg + 1800):deltaRotorPhaseDeg); // Приводим к диапазону -1800..1800
 	if(deltaRotorPhaseDeg < -1800 || deltaRotorPhaseDeg > 1800) // Переменная не должна выходить за диапазон, но если вдруг это случилось, то дебажим
 			printf("DRErr:%d,%d,%d\n", currentRotorPhaseDeg, prevRotorPhaseDeg, deltaRotorPhaseDeg);
 	//if(!deltaRotorPhaseDeg) // Если значение 0, значит сработал тот же датчик, значит изменилось направление вращения. Нужно включить шаговый режим работы, если он еще не включен по таймауту
 
 	// Скорость вращения ротора мотора в градусах за один период ШИМ. Это значение будет добавляться к положению ротора в каждом прерывании ШИМ. 4800 и 128 - делители таймера 1(ARR) и 4(Prescaler) соответственно
-	int rotorSpeedDegPerPeriod =  (4800 * deltaRotorPhaseDeg) / (deltaTime * 128); // Градусы за один шаг датчиков, делитель таймера 4, ARR таймера 1 / время шага = скорость вращения (градусов/один шаг ШИМ)
+	int currentRotorSpeed =  (4800 * deltaRotorPhaseDeg) / (deltaTime * 128); // Градусы за один шаг датчиков, делитель таймера 4, ARR таймера 1 / время шага = скорость вращения (градусов/один шаг ШИМ)
+
+	printf("%d,%d   ", currentRotorPhaseDeg, currentRotorSpeed);
 
 	switch(hallMode)
 	{
 		case HallModeEnabled:
-			RotorSetPhaseSpeed(currentRotorPhaseDeg, rotorSpeedDegPerPeriod);
+			RotorSetPhaseSpeed(currentRotorPhaseDeg, currentRotorSpeed);
+			printf("%d, ", currentRotorPhaseDeg);
 			break;
 		case HallModeDisabled:
 			break;
 		case HallModeCalibration:
-			hallPosDegByState[currentHallState] = RotorGetPhase();
+			hallCalibPosByState[currentHallState] = (hallCalibPosByState[currentHallState] * (calibDempDiv - 1) + FieldGetPhase() * calibMult) / calibDempDiv;
 			break;
 	}
 
@@ -112,3 +133,19 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	prevCCR[1] = currentCCR[1];
 	prevCCR[2] = currentCCR[2];
 }
+
+void CalibHall(int time)
+{
+	for(int i = 0; i < 6; i++)
+		hallCalibPosByState[i] = hallPosDegByState[i] * calibMult;
+
+	HallMode h = hallMode;
+	hallMode = HallModeCalibration;
+	HAL_Delay(time);
+	hallMode = h;
+
+	for(int i = 1; i < 7; i++)
+		printf("%d, ", hallCalibPosByState[i]);
+	printf("\n");
+}
+

@@ -7,11 +7,11 @@
 #include "motor.h"
 
 // Режим работы датчика Холла. Нормальная работа, выключен, калибровка
-typedef enum HallMode { HallModeEnabled, HallModeDisabled, HallModeCalibration };
+typedef enum { HallModeEnabled, HallModeDisabled, HallModeCalibration } HallMode;
 
-// Включает/выключает датчик Холла. Выключенный датчик не оказывает никакого влияния на работу драйвера. Но драйвер может продолжать работу с заданной частотой
-void EnableHall(bool ena);
 void RunTimer4();
+// Режим работы датчика Холла. Нормальная работа, выключен, калибровка
 void SetHallMode(HallMode newMode);
+void CalibHall(int time);
 
 #endif
