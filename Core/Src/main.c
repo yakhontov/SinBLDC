@@ -100,17 +100,13 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-	TIM1->CCR1 = 0;
-	TIM1->CCR2 = 0;
-	TIM1->CCR3 = 0;
-
 
 	for(int i = 1; i <= 10; i++)
 	{
 		HAL_Delay(100);
-		RunDrive(i, 9);
+		RunDrive(i, 3);
 	}
-	//SetHallMode(HallModeEnabled);
+	SetHallMode(HallModeEnabled);
 
 
   while (1)

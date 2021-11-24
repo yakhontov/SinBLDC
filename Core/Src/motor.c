@@ -17,6 +17,9 @@ void RunTimer1()
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
 	HAL_TIM_Base_Start_IT(&htim1);
+	TIM1->CCR1 = 0;
+	TIM1->CCR2 = 0;
+	TIM1->CCR3 = 0;
 }
 
 // Ограничить значение до диапазона [0..2400]
@@ -37,7 +40,7 @@ void OnTimer1Top()
 	if(currentRotorPhaseDeg < 0 || currentRotorPhaseDeg >= 3600) // Сделали оборот
 		ToggleB0(); // Для целей дебага дрыгнули ножкой
 	currentRotorPhaseDeg = Constrain3600(currentRotorPhaseDeg);
-	currentFieldPhaseDeg = Constrain3600(currentRotorPhaseDeg + 900); // Считаем фазу магнитного поля. Для масимального крутящего момента она должна быть сдвинута на 90 градусов вперед относительно положения ротора
+	currentFieldPhaseDeg = Constrain3600(currentRotorPhaseDeg + 1200); // Считаем фазу магнитного поля. Для масимального крутящего момента она должна быть сдвинута на 90 градусов вперед относительно положения ротора
 	int currentStep = currentFieldPhaseDeg / 600; // Текущий шаг в шаговом режиме (60гр сектор, в котором находится вектор). Для каждого шага отличаются расчеты тока в обмотках
 
 	switch(currentStep)

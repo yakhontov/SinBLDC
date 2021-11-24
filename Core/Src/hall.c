@@ -4,7 +4,6 @@
 HallMode hallMode = HallModeDisabled;
 
 int hallPosDegByState[] = {0, 2350, 880, 1040, 3050, 2510, 360, 0}; //
-//const int hallDeg[] = {0, 0, 1200, 600, 2400, 3000, 1800};
 
 int hallCalibPosByState[] = {0, 0, 0, 0, 0, 0, 0, 0}; // При калибровке датчиков сюда заносятся данные
 const int calibDempDiv = 256; // Делитель демпфера при калибровке. Чем больше значение, тем медленнее будет работать демпфер
@@ -71,7 +70,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 	TIM4_OC_SetPolarity(currentHallState); // Устанавливаем правильную полярность для следующего захвата
 
-	// Читаем новые значения из всех регистров CCR
+	// Читаем текущие значения из всех регистров CCR
 	currentCCR[0] = TIM4->CCR1;
 	currentCCR[1] = TIM4->CCR2;
 	currentCCR[2] = TIM4->CCR3;
@@ -97,21 +96,26 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 	int currentRotorPhaseDeg = hallPosDegByState[currentHallState]; // Текущее положение ротора в градусах
 	int deltaRotorPhaseDeg = currentRotorPhaseDeg - prevRotorPhaseDeg; // Сколько градусов прошло с прошлого раза. Значение может быть отрицательным. Знак числа зависит от направления вращения
-	deltaRotorPhaseDeg = (deltaRotorPhaseDeg > 1800)?(deltaRotorPhaseDeg - 1800):((deltaRotorPhaseDeg < -1800)?(deltaRotorPhaseDeg + 1800):deltaRotorPhaseDeg); // Приводим к диапазону -1800..1800
+	if(deltaRotorPhaseDeg < -1800) // Перескочили через 0 в положительном направлении
+		deltaRotorPhaseDeg += 3600;
+	//deltaRotorPhaseDeg = (deltaRotorPhaseDeg > 1800)?(deltaRotorPhaseDeg - 1800):((deltaRotorPhaseDeg < -1800)?(deltaRotorPhaseDeg + 1800):deltaRotorPhaseDeg); // Приводим к диапазону -1800..1800
+
 	if(deltaRotorPhaseDeg < -1800 || deltaRotorPhaseDeg > 1800) // Переменная не должна выходить за диапазон, но если вдруг это случилось, то дебажим
 			printf("DRErr:%d,%d,%d\n", currentRotorPhaseDeg, prevRotorPhaseDeg, deltaRotorPhaseDeg);
 	//if(!deltaRotorPhaseDeg) // Если значение 0, значит сработал тот же датчик, значит изменилось направление вращения. Нужно включить шаговый режим работы, если он еще не включен по таймауту
+	//лучше так: if(changedHallId == prevChangedHallId)
 
 	// Скорость вращения ротора мотора в градусах за один период ШИМ. Это значение будет добавляться к положению ротора в каждом прерывании ШИМ. 4800 и 128 - делители таймера 1(ARR) и 4(Prescaler) соответственно
 	int currentRotorSpeed =  (4800 * deltaRotorPhaseDeg) / (deltaTime * 128); // Градусы за один шаг датчиков, делитель таймера 4, ARR таймера 1 / время шага = скорость вращения (градусов/один шаг ШИМ)
 
-	printf("%d,%d   ", currentRotorPhaseDeg, currentRotorSpeed);
+	//printf("%d,%d   ", currentRotorPhaseDeg, currentRotorSpeed);
 
 	switch(hallMode)
 	{
 		case HallModeEnabled:
 			RotorSetPhaseSpeed(currentRotorPhaseDeg, currentRotorSpeed);
-			printf("%d, ", currentRotorPhaseDeg);
+			//printf("%d, ", currentRotorPhaseDeg);
+			printf("%d ", deltaTime);
 			break;
 		case HallModeDisabled:
 			break;
